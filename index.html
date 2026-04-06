@@ -209,6 +209,7 @@
     .today-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 10px; }
     .today-header h2 { margin: 0; font-size: 1rem; }
 
+    /* job card apply link */
     .job-apply-link {
       font-size: 0.75rem; color: var(--accent);
       text-decoration: none; border: 1px solid var(--accent);
@@ -221,6 +222,7 @@
 <body>
 <main id="app">
 
+  <!-- SIDEBAR -->
   <aside class="app-sidebar" aria-label="Primary">
     <div class="app-brand">
       <h1 class="app-brand-title">Job Hunter AI</h1>
@@ -240,33 +242,41 @@
     </div>
   </aside>
 
+  <!-- MAIN -->
   <div class="app-main">
 
+    <!-- DASHBOARD -->
     <section id="section-dashboard">
       <div class="section-header">
         <h1>Dashboard</h1>
         <p>Live overview of your job search pipeline.</p>
       </div>
-      <div class="card-grid card-grid-4">
+
+      <div class="card-grid card-grid-4" id="stat-grid">
         <div class="stat-card"><div class="stat-label">Total Jobs</div><div class="stat-value accent" id="stat-total-jobs">—</div></div>
         <div class="stat-card"><div class="stat-label">Applied Today</div><div class="stat-value yellow" id="stat-applied-today">—</div></div>
         <div class="stat-card"><div class="stat-label">Applications</div><div class="stat-value" id="stat-total-apps">—</div></div>
         <div class="stat-card"><div class="stat-label">Interview Rate</div><div class="stat-value green" id="stat-success-rate">—</div></div>
       </div>
+
       <div class="card mt-24">
         <div class="today-header">
           <h2>Applied Today</h2>
           <button class="btn btn-ghost" id="refresh-today-btn" style="padding:6px 12px;font-size:0.78rem;">Refresh</button>
         </div>
-        <div id="today-list-wrap"><div class="empty">Loading…</div></div>
+        <div id="today-list-wrap">
+          <div class="empty">Loading…</div>
+        </div>
       </div>
     </section>
 
+    <!-- RUN AGENT -->
     <section id="section-run-agent">
       <div class="section-header">
         <h1>Run Agent</h1>
         <p>Configure and launch the job-hunter pipeline.</p>
       </div>
+
       <div class="card">
         <div class="form-row" style="margin-bottom:20px;">
           <div class="form-group">
@@ -297,9 +307,652 @@
             </div>
           </div>
         </div>
+
         <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;">
           <span style="font-size:0.78rem;color:var(--text-muted);">Console output</span>
           <span id="run-status-badge" class="badge badge-idle">idle</span>
         </div>
         <div class="console" id="run-console">
           <div class="console-empty">No output yet. Start the agent to see logs here.</div>
+        </div>
+        <div class="error-msg" id="run-error" style="display:none;"></div>
+      </div>
+    </section>
+
+    <!-- JOBS -->
+    <section id="section-jobs">
+      <div class="section-header">
+        <h1>Jobs</h1>
+        <p>All tracked job listings.</p>
+      </div>
+
+      <div class="card">
+        <div class="filters">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="jobs-filter-status">Status</label>
+              <select id="jobs-filter-status">
+                <option value="">All</option>
+                <option value="found">Found</option>
+                <option value="applied">Applied</option>
+                <option value="interview">Interview</option>
+                <option value="rejected">Rejected</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="jobs-filter-company">Company</label>
+              <input type="text" id="jobs-filter-company" placeholder="Filter by company…" style="width:180px;">
+            </div>
+            <div class="form-group">
+              <label for="jobs-sort">Sort by</label>
+              <select id="jobs-sort">
+                <option value="discovered_at">Date</option>
+                <option value="company_name">Company</option>
+                <option value="job_title">Title</option>
+              </select>
+            </div>
+            <div class="form-group" style="justify-content:flex-end;">
+              <label>&nbsp;</label>
+              <button class="btn btn-primary" id="jobs-search-btn" style="padding:9px 16px;">Search</button>
+            </div>
+          </div>
+        </div>
+
+        <div id="jobs-cards-wrap" style="display:flex;flex-direction:column;gap:10px;">
+          <div class="empty">Loading…</div>
+        </div>
+
+        <div class="pagination">
+          <button class="btn btn-ghost" id="jobs-prev-btn" style="padding:6px 12px;font-size:0.78rem;" disabled>← Prev</button>
+          <span id="jobs-page-info">—</span>
+          <button class="btn btn-ghost" id="jobs-next-btn" style="padding:6px 12px;font-size:0.78rem;" disabled>Next →</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- APPLICATIONS -->
+    <section id="section-applications">
+      <div class="section-header">
+        <h1>Applications</h1>
+        <p>Submitted applications and their status.</p>
+      </div>
+
+      <div class="card">
+        <div class="filters">
+          <div class="form-row">
+            <div class="form-group">
+              <label for="apps-filter-status">Status</label>
+              <select id="apps-filter-status">
+                <option value="">All</option>
+                <option value="applied">Applied</option>
+                <option value="interview">Interview</option>
+                <option value="rejected">Rejected</option>
+                <option value="offer">Offer</option>
+              </select>
+            </div>
+            <div class="form-group" style="justify-content:flex-end;">
+              <label>&nbsp;</label>
+              <button class="btn btn-primary" id="apps-search-btn" style="padding:9px 16px;">Filter</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                <th>Job Title</th>
+                <th>Company</th>
+                <th>Status</th>
+                <th>Applied At</th>
+              </tr>
+            </thead>
+            <tbody id="apps-tbody">
+              <tr><td colspan="4" class="empty">Loading…</td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <div class="pagination">
+          <button class="btn btn-ghost" id="apps-prev-btn" style="padding:6px 12px;font-size:0.78rem;" disabled>← Prev</button>
+          <span id="apps-page-info">—</span>
+          <button class="btn btn-ghost" id="apps-next-btn" style="padding:6px 12px;font-size:0.78rem;" disabled>Next →</button>
+        </div>
+      </div>
+    </section>
+
+    <!-- FILES -->
+    <section id="section-files">
+      <div class="section-header">
+        <h1>Files</h1>
+        <p>Generated CVs and cover letters.</p>
+      </div>
+
+      <div class="card">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px;">
+          <span id="files-count" style="font-size:0.82rem;color:var(--text-muted);">—</span>
+          <button class="btn btn-ghost" id="files-refresh-btn" style="padding:6px 12px;font-size:0.78rem;">Refresh</button>
+        </div>
+        <div class="file-grid" id="files-list">
+          <div class="empty">Loading…</div>
+        </div>
+      </div>
+    </section>
+
+    <!-- SETTINGS -->
+    <section id="section-settings">
+      <div class="section-header">
+        <h1>Settings</h1>
+        <p>Pipeline configuration.</p>
+      </div>
+
+      <div class="card">
+        <div class="settings-group">
+          <h3>API</h3>
+          <div class="form-group" style="max-width:360px;margin-bottom:12px;">
+            <label for="cfg-api-url">Backend URL</label>
+            <input type="text" id="cfg-api-url" style="width:100%;">
+          </div>
+        </div>
+
+        <div class="settings-group">
+          <h3>Defaults</h3>
+          <div class="form-row" style="margin-bottom:12px;">
+            <div class="form-group">
+              <label for="cfg-default-mode">Default mode</label>
+              <select id="cfg-default-mode">
+                <option value="full">Full</option>
+                <option value="search">Search Only</option>
+                <option value="apply">Apply Only</option>
+                <option value="research">Research Only</option>
+              </select>
+            </div>
+            <div class="form-group">
+              <label for="cfg-default-limit">Default limit</label>
+              <input type="number" id="cfg-default-limit" min="1" max="500" style="width:110px;">
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;gap:10px;">
+          <button class="btn btn-primary" id="cfg-save-btn">Save Settings</button>
+          <button class="btn btn-ghost" id="cfg-reset-btn">Reset</button>
+        </div>
+        <div id="cfg-msg" style="font-size:0.78rem;margin-top:10px;"></div>
+      </div>
+    </section>
+
+  </div>
+</main>
+
+<script>
+// ─────────────────────────────────────────────────────────
+// CONFIG
+// ─────────────────────────────────────────────────────────
+const API = 'http://127.0.0.1:8000';
+const DEFAULT_API = API;
+const SETTINGS_KEY = 'job_hunter_settings';
+
+function esc(str) {
+  return String(str || '')
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
+}
+
+async function apiFetch(path, options = {}) {
+  const res = await fetch(API + path, {
+    headers: { 'Content-Type': 'application/json' },
+    ...options
+  });
+  if (!res.ok) throw new Error(await res.text());
+  return res.json();
+}
+
+function loadSettings() {
+  try {
+    const s = JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}');
+    return {
+      apiUrl: s.apiUrl || DEFAULT_API,
+      defaultMode: s.defaultMode || 'full',
+      defaultLimit: s.defaultLimit || ''
+    };
+  } catch { return { apiUrl: DEFAULT_API, defaultMode: 'full', defaultLimit: '' }; }
+}
+
+function saveSettings(s) {
+  localStorage.setItem(SETTINGS_KEY, JSON.stringify(s));
+}
+
+let cfg = loadSettings();
+
+// ─────────────────────────────────────────────────────────
+// NAVIGATION
+// ─────────────────────────────────────────────────────────
+function showSection(sectionId) {
+  document.querySelectorAll('.app-main section').forEach(s => s.classList.remove('active'));
+  document.querySelectorAll('[data-section]').forEach(b => b.classList.remove('active'));
+
+  const section = document.getElementById('section-' + sectionId);
+  if (section) section.classList.add('active');
+
+  const button = document.querySelector('[data-section="' + sectionId + '"]');
+  if (button) button.classList.add('active');
+
+  if (sectionId === 'dashboard') loadStats();
+  if (sectionId === 'jobs') loadJobs(true);
+  if (sectionId === 'files') loadFiles();
+  if (sectionId === 'applications') loadApplications(true);
+  if (sectionId === 'settings') initSettings();
+}
+
+document.querySelectorAll('[data-section]').forEach(b =>
+  b.addEventListener('click', () => showSection(b.dataset.section))
+);
+
+// ─────────────────────────────────────────────────────────
+// SIDEBAR STATUS
+// ─────────────────────────────────────────────────────────
+const sidebarDot = document.getElementById('sidebar-dot');
+const sidebarStatusText = document.getElementById('sidebar-status-text');
+
+function updateSidebarStatus(status) {
+  sidebarDot.className = 'status-dot ' + (status || 'idle');
+  sidebarStatusText.textContent = status || 'idle';
+}
+
+// ─────────────────────────────────────────────────────────
+// UTILITIES
+// ─────────────────────────────────────────────────────────
+function animateCount(el, target, duration = 700) {
+  target = Math.round(Number(target) || 0);
+  const start = Date.now();
+  function ease(t) { return 1 - Math.pow(1 - t, 3); }
+  function tick() {
+    const p = Math.min((Date.now() - start) / duration, 1);
+    el.textContent = Math.round(target * ease(p));
+    if (p < 1) requestAnimationFrame(tick);
+    else el.textContent = target;
+  }
+  el.textContent = '0';
+  requestAnimationFrame(tick);
+}
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  return new Date(iso).toLocaleDateString('en-IN', { day: 'numeric', month: 'short', year: '2-digit' });
+}
+
+function fmtSize(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(0) + ' KB';
+  return (bytes / 1024 / 1024).toFixed(1) + ' MB';
+}
+
+function badge(status) {
+  if (!status) return '';
+  const cls = 'badge badge-' + String(status).toLowerCase().replace(/\s+/g, '-');
+  return `<span class="${cls}">${esc(status)}</span>`;
+}
+
+// ─────────────────────────────────────────────────────────
+// DASHBOARD
+// ─────────────────────────────────────────────────────────
+async function loadStats() {
+  const totalJobs = document.getElementById('stat-total-jobs');
+  const appliedToday = document.getElementById('stat-applied-today');
+  const totalApplications = document.getElementById('stat-total-apps');
+  const successRate = document.getElementById('stat-success-rate');
+
+  try {
+    const { stats } = await apiFetch('/api/stats');
+    animateCount(totalJobs, stats.total_jobs);
+    animateCount(appliedToday, stats.applied_today);
+    animateCount(totalApplications, stats.total_applications);
+    successRate.textContent = (stats.success_rate || 0) + '%';
+  } catch {
+    totalJobs.textContent = '--';
+    appliedToday.textContent = '--';
+    totalApplications.textContent = '--';
+    successRate.textContent = '--';
+  }
+
+  loadTodayList();
+}
+
+async function loadTodayList() {
+  const wrap = document.getElementById('today-list-wrap');
+  try {
+    const { applications } = await apiFetch('/api/apply-today');
+    if (!applications || applications.length === 0) {
+      wrap.innerHTML = '<div class="empty">Nothing applied today yet.</div>';
+      return;
+    }
+    wrap.innerHTML = '<div class="today-list">' + applications.map(a => `
+      <div class="today-item">
+        <span class="today-item-title">${esc(a.job_title || '—')}</span>
+        <span class="today-item-co">${esc(a.company_name || '')}</span>
+        ${badge(a.app_status || a.status || 'applied')}
+      </div>
+    `).join('') + '</div>';
+  } catch {
+    wrap.innerHTML = '<div class="empty" style="color:var(--text-muted)">No applications today yet.</div>';
+  }
+}
+
+document.getElementById('refresh-today-btn').addEventListener('click', loadStats);
+
+// ─────────────────────────────────────────────────────────
+// RUN AGENT
+// ─────────────────────────────────────────────────────────
+let ws = null;
+let agentRunning = false;
+
+const runConsole = document.getElementById('run-console');
+const runStartBtn = document.getElementById('run-start-btn');
+const runStatusBadge = document.getElementById('run-status-badge');
+const runError = document.getElementById('run-error');
+
+function appendConsoleLine(text, cls = '') {
+  const wasEmpty = runConsole.querySelector('.console-empty');
+  if (wasEmpty) runConsole.innerHTML = '';
+  const div = document.createElement('div');
+  div.className = 'line' + (cls ? ' ' + cls : '');
+  div.textContent = text;
+  runConsole.appendChild(div);
+  runConsole.scrollTop = runConsole.scrollHeight;
+}
+
+function setRunStatus(status) {
+  runStatusBadge.className = 'badge badge-' + (status || 'idle');
+  runStatusBadge.textContent = status || 'idle';
+  updateSidebarStatus(status);
+}
+
+function connectWs(runId) {
+  ws = new WebSocket((API.replace('http', 'ws')) + `/api/ws/logs?run_id=${runId}`);
+
+  ws.onmessage = e => {
+    try {
+      const obj = JSON.parse(e.data);
+      if (obj.type === 'heartbeat') {
+        setRunStatus(obj.status);
+        if (obj.status !== 'running') {
+          stopWs();
+          agentRunning = false;
+          runStartBtn.disabled = false;
+          runStartBtn.textContent = '▶ Start';
+          // refresh dashboard stats after run completes
+          loadStats();
+        }
+        return;
+      }
+    } catch {}
+    appendConsoleLine(e.data);
+  };
+
+  ws.onerror = () => appendConsoleLine('[WebSocket error]', 'err');
+  ws.onclose = () => {
+    if (agentRunning) setTimeout(() => connectWs(runId), 2000);
+  };
+}
+
+function stopWs() {
+  if (ws) { try { ws.close(); } catch {} ws = null; }
+}
+
+async function startRun() {
+  const mode = document.getElementById('run-mode').value;
+  const limitVal = document.getElementById('run-limit').value;
+  const dryRun = document.getElementById('run-dry-run').checked;
+
+  const body = { mode, dry_run: dryRun, limit: limitVal ? parseInt(limitVal, 10) : 5 };
+
+  runError.style.display = 'none';
+  runConsole.innerHTML = '<div class="console-empty">Starting…</div>';
+  runStartBtn.disabled = true;
+  runStartBtn.textContent = '… Running';
+  setRunStatus('running');
+  agentRunning = true;
+
+  try {
+    const res = await apiFetch('/api/run', { method: 'POST', body: JSON.stringify(body) });
+    stopWs();
+    connectWs(res.run_id);
+  } catch (e) {
+    agentRunning = false;
+    runStartBtn.disabled = false;
+    runStartBtn.textContent = '▶ Start';
+    setRunStatus('error');
+    runError.style.display = 'block';
+    runError.textContent = 'Failed to start: ' + e.message;
+  }
+}
+
+runStartBtn.addEventListener('click', startRun);
+
+document.getElementById('run-clear-btn').addEventListener('click', () => {
+  runConsole.innerHTML = '<div class="console-empty">No output yet. Start the agent to see logs here.</div>';
+  runError.style.display = 'none';
+});
+
+async function syncRunStatus() {
+  try {
+    const data = await apiFetch('/api/run/status');
+    setRunStatus(data.status);
+    if (data.status === 'running' && data.run_id) {
+      agentRunning = true;
+      runStartBtn.disabled = true;
+      runStartBtn.textContent = '… Running';
+      stopWs();
+      connectWs(data.run_id);
+      if (data.last_10_lines) data.last_10_lines.forEach(l => appendConsoleLine(l));
+    }
+  } catch {}
+}
+syncRunStatus();
+
+// ─────────────────────────────────────────────────────────
+// JOBS
+// ─────────────────────────────────────────────────────────
+let jobsPage = 0;
+const JOBS_LIMIT = 25;
+let jobsTotal = 0;
+
+async function loadJobs(reset = false) {
+  if (reset) jobsPage = 0;
+
+  const status = document.getElementById('jobs-filter-status').value;
+  const company = document.getElementById('jobs-filter-company').value;
+  const orderBy = document.getElementById('jobs-sort').value;
+  const wrap = document.getElementById('jobs-cards-wrap');
+
+  wrap.innerHTML = '<div class="empty">Loading…</div>';
+
+  let qs = `?limit=${JOBS_LIMIT}&offset=${jobsPage * JOBS_LIMIT}&order_by=${orderBy}&desc=true`;
+  if (status) qs += '&status=' + encodeURIComponent(status);
+  if (company) qs += '&company=' + encodeURIComponent(company);
+
+  try {
+    const { jobs, total } = await apiFetch('/api/jobs' + qs);
+    jobsTotal = parseInt(total, 10);
+
+    if (!jobs || jobs.length === 0) {
+      wrap.innerHTML = '<div class="empty">No jobs available</div>';
+    } else {
+      wrap.innerHTML = jobs.map(j => `
+        <div style="
+          background: var(--surface-2);
+          border: 1px solid var(--border);
+          border-radius: 10px;
+          padding: 14px 16px;
+          display: flex;
+          justify-content: space-between;
+          align-items: center;
+          gap: 16px;
+        ">
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:700;font-size:0.92rem;color:var(--text);margin-bottom:4px;
+                        overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">
+              ${esc(j.job_title || '—')}
+            </div>
+            <div style="color:var(--text-muted);font-size:0.8rem;margin-bottom:4px;">
+              ${esc(j.company_name || '—')}
+              ${j.location ? ' · ' + esc(j.location) : ''}
+            </div>
+            <div style="color:var(--text-muted);font-size:0.72rem;">
+              Found: ${fmtDate(j.discovered_at)}
+            </div>
+          </div>
+          <div style="display:flex;flex-direction:column;align-items:flex-end;gap:8px;flex-shrink:0;">
+            ${badge(j.status)}
+            ${j.job_url ? `<a href="${esc(j.job_url)}" target="_blank" rel="noopener" class="job-apply-link">Apply →</a>` : ''}
+          </div>
+        </div>
+      `).join('');
+    }
+
+    const start = jobsPage * JOBS_LIMIT + 1;
+    const end = Math.min((jobsPage + 1) * JOBS_LIMIT, jobsTotal);
+    document.getElementById('jobs-page-info').textContent =
+      jobsTotal === 0 ? '0 results' : `${start}–${end} of ${jobsTotal}`;
+    document.getElementById('jobs-prev-btn').disabled = jobsPage === 0;
+    document.getElementById('jobs-next-btn').disabled = end >= jobsTotal;
+
+  } catch (e) {
+    console.error('Jobs load error:', e);
+    wrap.innerHTML = '<div class="empty">Failed to load jobs</div>';
+  }
+}
+
+document.getElementById('jobs-search-btn').addEventListener('click', () => loadJobs(true));
+document.getElementById('jobs-prev-btn').addEventListener('click', () => { jobsPage--; loadJobs(); });
+document.getElementById('jobs-next-btn').addEventListener('click', () => { jobsPage++; loadJobs(); });
+document.getElementById('jobs-filter-company').addEventListener('keydown', e => {
+  if (e.key === 'Enter') loadJobs(true);
+});
+
+// ─────────────────────────────────────────────────────────
+// APPLICATIONS
+// ─────────────────────────────────────────────────────────
+let appsPage = 0;
+const APPS_LIMIT = 25;
+let appsTotal = 0;
+
+async function loadApplications(reset = false) {
+  if (reset) appsPage = 0;
+
+  const status = document.getElementById('apps-filter-status').value;
+  const tbody = document.getElementById('apps-tbody');
+
+  tbody.innerHTML = '<tr><td colspan="4" class="empty">Loading…</td></tr>';
+
+  let qs = `?limit=${APPS_LIMIT}&offset=${appsPage * APPS_LIMIT}`;
+  if (status) qs += '&status=' + encodeURIComponent(status);
+
+  try {
+    const { applications, total } = await apiFetch('/api/applications' + qs);
+    appsTotal = parseInt(total, 10);
+
+    if (!applications || applications.length === 0) {
+      tbody.innerHTML = '<tr><td colspan="4" style="opacity:0.6;text-align:center;padding:32px 0;">No applications yet</td></tr>';
+    } else {
+      tbody.innerHTML = applications.map(a => `
+        <tr>
+          <td title="${esc(a.job_title)}">${esc(a.job_title || '—')}</td>
+          <td title="${esc(a.company_name)}">${esc(a.company_name || '—')}</td>
+          <td>${badge(a.status || 'applied')}</td>
+          <td>${fmtDate(a.applied_at)}</td>
+        </tr>
+      `).join('');
+    }
+
+    const start = appsPage * APPS_LIMIT + 1;
+    const end = Math.min((appsPage + 1) * APPS_LIMIT, appsTotal);
+    document.getElementById('apps-page-info').textContent =
+      appsTotal === 0 ? '0 results' : `${start}–${end} of ${appsTotal}`;
+    document.getElementById('apps-prev-btn').disabled = appsPage === 0;
+    document.getElementById('apps-next-btn').disabled = end >= appsTotal;
+
+  } catch (e) {
+    console.error('Applications load error:', e);
+    tbody.innerHTML = '<tr><td colspan="4" style="opacity:0.6;text-align:center;padding:32px 0;">No applications yet</td></tr>';
+  }
+}
+
+document.getElementById('apps-search-btn').addEventListener('click', () => loadApplications(true));
+document.getElementById('apps-prev-btn').addEventListener('click', () => { appsPage--; loadApplications(); });
+document.getElementById('apps-next-btn').addEventListener('click', () => { appsPage++; loadApplications(); });
+
+// ─────────────────────────────────────────────────────────
+// FILES
+// ─────────────────────────────────────────────────────────
+async function loadFiles() {
+  const el = document.getElementById('files-list');
+  const countEl = document.getElementById('files-count');
+  el.innerHTML = '<div class="empty">Loading…</div>';
+
+  try {
+    const { files } = await apiFetch('/api/files');
+
+    if (!files || files.length === 0) {
+      el.innerHTML = '<div class="empty">No files yet. Run the agent to generate CVs and cover letters.</div>';
+      countEl.textContent = '0 files';
+      return;
+    }
+
+    countEl.textContent = `${files.length} file${files.length !== 1 ? 's' : ''}`;
+    el.innerHTML = files.map(f => `
+      <div class="file-row">
+        <span style="font-size:1rem;flex-shrink:0;">${f.name.endsWith('.docx') ? '📄' : f.name.endsWith('.pdf') ? '📕' : '📝'}</span>
+        <span class="file-name" title="${esc(f.name)}">${esc(f.name)}</span>
+        <span class="file-meta">${(f.size / 1024).toFixed(0)} KB · ${fmtDate(f.modified)}</span>
+        <a href="${API}/api/files/${encodeURIComponent(f.name)}" download class="btn btn-ghost" style="padding:5px 10px;font-size:0.75rem;">Download</a>
+      </div>
+    `).join('');
+  } catch (e) {
+    console.error('Files load error:', e);
+    el.innerHTML = '<div class="empty">Failed to load files</div>';
+  }
+}
+
+document.getElementById('files-refresh-btn').addEventListener('click', loadFiles);
+
+// ─────────────────────────────────────────────────────────
+// SETTINGS
+// ─────────────────────────────────────────────────────────
+function initSettings() {
+  document.getElementById('cfg-api-url').value = cfg.apiUrl;
+  document.getElementById('cfg-default-mode').value = cfg.defaultMode;
+  document.getElementById('cfg-default-limit').value = cfg.defaultLimit;
+}
+
+document.getElementById('cfg-save-btn').addEventListener('click', () => {
+  cfg.apiUrl = document.getElementById('cfg-api-url').value.trim() || DEFAULT_API;
+  cfg.defaultMode = document.getElementById('cfg-default-mode').value;
+  cfg.defaultLimit = document.getElementById('cfg-default-limit').value;
+  saveSettings(cfg);
+  document.getElementById('cfg-msg').textContent = 'Saved.';
+  document.getElementById('cfg-msg').style.color = 'var(--green)';
+  setTimeout(() => document.getElementById('cfg-msg').textContent = '', 2000);
+});
+
+document.getElementById('cfg-reset-btn').addEventListener('click', () => {
+  cfg = { apiUrl: DEFAULT_API, defaultMode: 'full', defaultLimit: '' };
+  saveSettings(cfg);
+  initSettings();
+  document.getElementById('cfg-msg').textContent = 'Reset to defaults.';
+  document.getElementById('cfg-msg').style.color = 'var(--text-muted)';
+  setTimeout(() => document.getElementById('cfg-msg').textContent = '', 2000);
+});
+
+// ─────────────────────────────────────────────────────────
+// BOOT
+// ─────────────────────────────────────────────────────────
+document.getElementById('run-mode').value = cfg.defaultMode;
+if (cfg.defaultLimit) document.getElementById('run-limit').value = cfg.defaultLimit;
+
+showSection('dashboard');
+</script>
+</body>
+</html>

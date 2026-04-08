@@ -100,6 +100,14 @@ def get_stats():
             cur.execute("SELECT COUNT(*) AS count FROM companies")
             total_companies = cur.fetchone()["count"]
 
+            cur.execute("""
+                SELECT COUNT(*) AS count FROM applications
+                WHERE status IN ('interview', 'offer')
+            """)
+            successful = cur.fetchone()["count"]
+
+        success_rate = round(successful / total_applications * 100, 1) if total_applications else 0.0
+
         conn.close()
         return {
             "stats": {
@@ -107,14 +115,14 @@ def get_stats():
                 "applied_today": applied_today,
                 "total_applications": total_applications,
                 "total_companies": total_companies,
-                "success_rate": 0
+                "success_rate": success_rate
             }
         }
     except Exception as e:
         logger.error(f"Stats error: {e}")
         return {"stats": {"total_jobs": 0, "applied_today": 0,
                           "total_applications": 0, "total_companies": 0,
-                          "success_rate": 0}}
+                          "success_rate": 0.0}}
 
 # ─────────────────────────────
 # APPLY TODAY

@@ -27,21 +27,30 @@ from tavily import TavilyClient
 
 load_dotenv()
 
+from config import CANDIDATE_PROFILE, TARGET_ROLES, JOB_PREFERENCES
+
 # ---------------------------------------------------------------------------
-# Tanzil's profile — used by Claude to compute fit_score
+# Candidate summary built from config.py — edit config.py to change this.
 # ---------------------------------------------------------------------------
-CANDIDATE_SUMMARY = """
-Name: Tanzil Ahmed
-Location: Bengaluru, India
-Skills:
-  - Backend: Java, Spring Boot, Node.js, Express.js, REST APIs
-  - Frontend: React, Next.js, TypeScript
-  - Data Engineering: Apache Kafka, PySpark, GCP, Azure
-  - Databases: PostgreSQL, MySQL, MongoDB, Redis
-  - DevOps: Docker, Kubernetes, CI/CD
-Target roles: Full Stack Developer, Data Engineer, Associate Software Engineer, Backend Developer
-Preference: Hybrid or Remote, Bengaluru or Remote India
-"""
+def _build_candidate_summary() -> str:
+    skills = CANDIDATE_PROFILE.get("skills", {})
+    skill_lines = "\n".join(
+        f"  - {key.replace('_', ' ').title()}: {', '.join(vals)}"
+        for key, vals in skills.items()
+        if vals
+    )
+    roles = ", ".join(TARGET_ROLES)
+    locations = ", ".join(JOB_PREFERENCES.get("locations", []))
+    work_modes = ", ".join(CANDIDATE_PROFILE.get("preferred_work_mode", []))
+    return (
+        f"Name: {CANDIDATE_PROFILE['name']}\n"
+        f"Location: {CANDIDATE_PROFILE['location']}\n"
+        f"Skills:\n{skill_lines}\n"
+        f"Target roles: {roles}\n"
+        f"Preference: {work_modes}, {locations}"
+    )
+
+CANDIDATE_SUMMARY = _build_candidate_summary()
 
 # Claude model to use for analysis (fast and cheap for structured extraction)
 HAIKU_MODEL = "claude-haiku-4-5-20251001"

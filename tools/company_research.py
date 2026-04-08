@@ -219,7 +219,13 @@ class CompanyResearcher:
                     "culture_notes":    profile.get("culture_notes", ""),
                     "glassdoor_rating": profile.get("glassdoor_rating"),
                     "funding_stage":    profile.get("funding_stage", ""),
-                    "recent_news":      json.dumps(profile.get("recent_news", [])),
+                    "recent_news":      profile.get("recent_news", []),
+                    "company_size":     profile.get("company_size", ""),
+                    "culture_score":    profile.get("culture_score"),
+                    "red_flags":        profile.get("red_flags", []),
+                    "why_apply":        profile.get("why_apply", ""),
+                    "fit_score":        profile.get("fit_score"),
+                    "data_quality":     profile.get("data_quality", ""),
                 })
                 profile["db_id"] = company_id
                 print(f"[researcher] Saved to DB with id={company_id}")

@@ -1,8 +1,13 @@
 """
 tools/tracker.py — Persists job application state and history.
 PostgreSQL only. No SQLite fallback.
+
+This module is the SINGLE SOURCE OF TRUTH for the database schema.
+api.py delegates schema creation here on startup — do not duplicate
+CREATE TABLE statements elsewhere.
 """
 
+import json
 import os
 from datetime import date, datetime
 from typing import Optional
@@ -59,13 +64,23 @@ class JobTracker:
         );
 
         CREATE TABLE IF NOT EXISTS companies (
-            id           SERIAL PRIMARY KEY,
-            name         TEXT UNIQUE,
-            industry     TEXT,
-            size         TEXT,
-            tech_stack   TEXT,
-            notes        TEXT,
-            created_at   TIMESTAMPTZ DEFAULT NOW()
+            id               SERIAL PRIMARY KEY,
+            name             TEXT UNIQUE,
+            website          TEXT,
+            overview         TEXT,
+            tech_stack       TEXT,          -- JSON-encoded list e.g. '["Java","Kafka"]'
+            culture_notes    TEXT,
+            glassdoor_rating NUMERIC,
+            funding_stage    TEXT,
+            recent_news      TEXT,          -- JSON-encoded list of bullet strings
+            company_size     TEXT,
+            culture_score    INTEGER,
+            red_flags        TEXT,          -- JSON-encoded list of concern strings
+            why_apply        TEXT,
+            fit_score        INTEGER,
+            data_quality     TEXT,
+            created_at       TIMESTAMPTZ DEFAULT NOW(),
+            updated_at       TIMESTAMPTZ DEFAULT NOW()
         );
 
         CREATE TABLE IF NOT EXISTS applications (
@@ -117,20 +132,54 @@ class JobTracker:
             raise
 
     def save_company(self, company: dict) -> int:
+        def _to_json(val):
+            """Serialize lists to JSON strings; pass through strings/None unchanged."""
+            if isinstance(val, list):
+                return json.dumps(val)
+            return val  # already a string (pre-encoded) or None
+
         sql = """
-        INSERT INTO companies (name, industry, size, tech_stack, notes)
-        VALUES (%s, %s, %s, %s, %s)
-        ON CONFLICT (name) DO UPDATE SET notes = EXCLUDED.notes
+        INSERT INTO companies (
+            name, website, overview, tech_stack, culture_notes,
+            glassdoor_rating, funding_stage, recent_news,
+            company_size, culture_score, red_flags, why_apply,
+            fit_score, data_quality, updated_at
+        )
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, NOW())
+        ON CONFLICT (name) DO UPDATE SET
+            website          = EXCLUDED.website,
+            overview         = EXCLUDED.overview,
+            tech_stack       = EXCLUDED.tech_stack,
+            culture_notes    = EXCLUDED.culture_notes,
+            glassdoor_rating = EXCLUDED.glassdoor_rating,
+            funding_stage    = EXCLUDED.funding_stage,
+            recent_news      = EXCLUDED.recent_news,
+            company_size     = EXCLUDED.company_size,
+            culture_score    = EXCLUDED.culture_score,
+            red_flags        = EXCLUDED.red_flags,
+            why_apply        = EXCLUDED.why_apply,
+            fit_score        = EXCLUDED.fit_score,
+            data_quality     = EXCLUDED.data_quality,
+            updated_at       = NOW()
         RETURNING id;
         """
         try:
             with self.conn.cursor() as cur:
                 cur.execute(sql, (
                     company.get("name"),
-                    company.get("industry"),
-                    company.get("size"),
-                    company.get("tech_stack"),
-                    company.get("notes"),
+                    company.get("website"),
+                    company.get("overview"),
+                    _to_json(company.get("tech_stack")),
+                    company.get("culture_notes"),
+                    company.get("glassdoor_rating"),
+                    company.get("funding_stage"),
+                    _to_json(company.get("recent_news")),
+                    company.get("company_size"),
+                    company.get("culture_score"),
+                    _to_json(company.get("red_flags")),
+                    company.get("why_apply"),
+                    company.get("fit_score"),
+                    company.get("data_quality"),
                 ))
                 row_id = cur.fetchone()[0]
             self.conn.commit()

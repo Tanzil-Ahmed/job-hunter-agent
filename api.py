@@ -55,50 +55,17 @@ app.add_middleware(
 # ─────────────────────────────
 @app.on_event("startup")
 def startup():
+    """
+    Delegate schema creation to JobTracker — it is the single source of truth.
+    We open and immediately close a tracker just to run _create_schema().
+    """
     if not DATABASE_URL:
-        logger.error("DATABASE_URL not set")
+        logger.error("DATABASE_URL not set — skipping schema init")
         return
     try:
-        conn = get_conn()
-        with conn.cursor() as cur:
-            cur.execute("""
-            CREATE TABLE IF NOT EXISTS jobs (
-                id            SERIAL PRIMARY KEY,
-                job_title     TEXT,
-                company_name  TEXT,
-                location      TEXT,
-                job_url       TEXT UNIQUE,
-                description   TEXT,
-                source        TEXT,
-                status        TEXT DEFAULT 'found',
-                posted_date   DATE,
-                discovered_at TIMESTAMPTZ DEFAULT NOW(),
-                updated_at    TIMESTAMPTZ DEFAULT NOW()
-            );
-            CREATE TABLE IF NOT EXISTS applications (
-                id          SERIAL PRIMARY KEY,
-                job_id      INTEGER REFERENCES jobs(id),
-                status      TEXT DEFAULT 'applied',
-                applied_at  TIMESTAMPTZ DEFAULT NOW(),
-                cv_path     TEXT,
-                cover_path  TEXT,
-                updated_at  TIMESTAMPTZ DEFAULT NOW()
-            );
-            CREATE TABLE IF NOT EXISTS companies (
-                id         SERIAL PRIMARY KEY,
-                name       TEXT UNIQUE,
-                created_at TIMESTAMPTZ DEFAULT NOW()
-            );
-            CREATE TABLE IF NOT EXISTS logs (
-                id         SERIAL PRIMARY KEY,
-                run_id     TEXT,
-                level      TEXT,
-                message    TEXT,
-                created_at TIMESTAMPTZ DEFAULT NOW()
-            );
-            """)
-        conn.commit()
-        conn.close()
+        from tools.tracker import JobTracker
+        tracker = JobTracker()
+        tracker.close()
         logger.info("PostgreSQL schema ready")
     except Exception as e:
         logger.error(f"DB startup error: {e}")

@@ -1,6 +1,15 @@
 import axios from "axios";
 
-import type { Application, FileEntry, FitBreakdown, InterviewPrep, Job, Stats } from "../types";
+import type {
+  Application,
+  FileEntry,
+  FitBreakdown,
+  InterviewPrep,
+  Job,
+  RejectionPatterns,
+  RejectionReason,
+  Stats,
+} from "../types";
 
 type QueryParams = Record<string, string | number | boolean | undefined>;
 
@@ -55,6 +64,22 @@ export async function fetchInterviewPrep(jobId: number): Promise<InterviewPrep> 
     `/api/jobs/${jobId}/interview-prep`,
   );
   return response.data.interview_prep;
+}
+
+export async function submitRejection(
+  jobId: number,
+  body: { text?: string; ghost?: boolean },
+): Promise<RejectionReason> {
+  const response = await apiClient.post<{ rejection_reason: RejectionReason }>(
+    `/api/jobs/${jobId}/rejection`,
+    body,
+  );
+  return response.data.rejection_reason;
+}
+
+export async function fetchRejectionPatterns(): Promise<RejectionPatterns> {
+  const response = await apiClient.get<RejectionPatterns>("/api/rejection-patterns");
+  return response.data;
 }
 
 export async function fetchApplyToday(): Promise<{ applications: Application[]; count: number; date: string }> {

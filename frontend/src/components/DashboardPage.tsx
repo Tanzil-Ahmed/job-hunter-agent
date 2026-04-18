@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchApplyToday, fetchStats } from "../api/client";
 import type { Application, Stats } from "../types";
+import RejectionPatternsCard from "./RejectionPatternsCard";
 
 function useCountUp(target: number, duration = 600): number {
   const [value, setValue] = useState(0);
@@ -107,6 +108,8 @@ export default function DashboardPage() {
           </div>
         )}
       </section>
+
+      <RejectionPatternsCard />
     </div>
   );
 }

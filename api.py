@@ -75,6 +75,8 @@ def startup():
         with conn.cursor() as cur:
             cur.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS fit_breakdown JSONB")
             cur.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS interview_prep JSONB")
+            cur.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS rejection_text TEXT")
+            cur.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS rejection_reason JSONB")
         conn.commit()
         conn.close()
         logger.info("fit_breakdown + interview_prep columns ready")
@@ -582,6 +584,139 @@ async def get_interview_prep(job_id: int):
     except Exception as e:
         logger.error(f"interview_prep error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
+
+# ─────────────────────────────
+# REJECTION ANALYSIS
+# ─────────────────────────────
+class RejectionRequest(BaseModel):
+    text: Optional[str] = None
+    ghost: bool = False
+
+
+@router.post("/jobs/{job_id}/rejection")
+async def submit_rejection(job_id: int, body: RejectionRequest):
+    from fastapi import HTTPException
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("SELECT id FROM jobs WHERE id = %s", (job_id,))
+            if not cur.fetchone():
+                conn.close()
+                raise HTTPException(status_code=404, detail="Job not found")
+        conn.close()
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"rejection lookup error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+    if body.ghost:
+        reason = {"category": "ghost", "confidence": 1.0, "explanation": "No response received"}
+    else:
+        if not body.text:
+            raise HTTPException(status_code=400, detail="text is required when ghost is false")
+
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            reason = {"category": "other", "confidence": 0.5, "explanation": "API key not configured"}
+        else:
+            user_prompt = (
+                f"Candidate: {CANDIDATE_SUMMARY}\n\n"
+                f"Rejection message:\n{body.text[:2000]}\n\n"
+                "Classify this rejection. Return ONLY a JSON object:\n"
+                '{"category": "skills_gap|overqualified|culture_fit|timing|ghost|other", '
+                '"confidence": 0.0-1.0, "explanation": "one line reason"}'
+            )
+            try:
+                import anthropic as _anthropic
+                client = _anthropic.Anthropic(api_key=api_key)
+                message = client.messages.create(
+                    model="claude-sonnet-4-20250514",
+                    max_tokens=256,
+                    system="You are a job rejection analyzer. Classify why this candidate was rejected. Return ONLY valid JSON.",
+                    messages=[{"role": "user", "content": user_prompt}],
+                )
+                raw = message.content[0].text.strip()
+                if raw.startswith("```"):
+                    raw = raw.split("\n", 1)[-1]
+                if raw.endswith("```"):
+                    raw = raw.rsplit("```", 1)[0].strip()
+                reason = json.loads(raw)
+            except Exception as e:
+                logger.error(f"Claude rejection call failed: {e}")
+                reason = {"category": "other", "confidence": 0.5, "explanation": "Analysis failed"}
+
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE jobs SET status='rejected', rejection_text=%s, rejection_reason=%s, updated_at=NOW() WHERE id=%s",
+                (body.text, json.dumps(reason), job_id)
+            )
+        conn.commit()
+        conn.close()
+    except Exception as e:
+        logger.error(f"rejection DB write failed: {e}")
+
+    return {"rejection_reason": reason}
+
+
+@router.get("/rejection-patterns")
+async def get_rejection_patterns():
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("SELECT rejection_reason FROM jobs WHERE rejection_reason IS NOT NULL")
+            rows = cur.fetchall()
+        conn.close()
+    except Exception as e:
+        logger.error(f"rejection-patterns DB error: {e}")
+        return {"total": 0, "by_category": {}, "meta_analysis": None}
+
+    total = len(rows)
+    by_category: dict = {}
+    summaries: list = []
+
+    for row in rows:
+        rr = row["rejection_reason"]
+        if isinstance(rr, str):
+            try:
+                rr = json.loads(rr)
+            except Exception:
+                continue
+        cat = rr.get("category", "other")
+        by_category[cat] = by_category.get(cat, 0) + 1
+        summaries.append(f"{cat}: {rr.get('explanation', '')}")
+
+    meta_analysis = None
+    if total >= 5:
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if api_key:
+            summary_text = "\n".join(summaries)
+            meta_prompt = (
+                f"Here are {total} job rejection classifications for a candidate:\n{summary_text}\n\n"
+                "Provide a meta-analysis. Return ONLY a JSON object:\n"
+                '{"top_reason": "...", "pattern": "one sentence pattern observed", "recommendation": "one actionable sentence"}'
+            )
+            try:
+                import anthropic as _anthropic
+                client = _anthropic.Anthropic(api_key=api_key)
+                message = client.messages.create(
+                    model="claude-sonnet-4-20250514",
+                    max_tokens=256,
+                    system="You are a career coach analyzing job rejection patterns. Return ONLY valid JSON.",
+                    messages=[{"role": "user", "content": meta_prompt}],
+                )
+                raw = message.content[0].text.strip()
+                if raw.startswith("```"):
+                    raw = raw.split("\n", 1)[-1]
+                if raw.endswith("```"):
+                    raw = raw.rsplit("```", 1)[0].strip()
+                meta_analysis = json.loads(raw)
+            except Exception as e:
+                logger.error(f"Claude meta-analysis failed: {e}")
+
+    return {"total": total, "by_category": by_category, "meta_analysis": meta_analysis}
 
 # ─────────────────────────────
 # INCLUDE ROUTER

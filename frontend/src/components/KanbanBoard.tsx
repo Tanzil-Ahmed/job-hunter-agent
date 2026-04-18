@@ -18,6 +18,7 @@ import { fetchJobs, updateJobStatus } from "../api/client";
 import type { Job } from "../types/index";
 import FitScoreModal from "./FitScoreModal";
 import InterviewPrepModal from "./InterviewPrepModal";
+import RejectionModal from "./RejectionModal";
 
 type BoardStatus = "found" | "applied" | "interview" | "offer" | "rejected";
 type FilterType = "all" | "tech" | "non-tech" | "internship";
@@ -171,10 +172,12 @@ function SortableJobCard({
   job,
   onCardClick,
   onPrepClick,
+  onRejectClick,
 }: {
   job: Job;
   onCardClick: (job: Job) => void;
   onPrepClick: (job: Job) => void;
+  onRejectClick: (job: Job) => void;
 }) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `job-${job.id}`,
@@ -229,6 +232,13 @@ function SortableJobCard({
         >
           Prep
         </button>
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onRejectClick(job); }}
+          className="text-xs text-[#ff4d6a] hover:text-[#e8e8f0]"
+        >
+          Reject
+        </button>
       </div>
     </article>
   );
@@ -239,11 +249,13 @@ function Column({
   jobs,
   onCardClick,
   onPrepClick,
+  onRejectClick,
 }: {
   status: BoardStatus;
   jobs: Job[];
   onCardClick: (job: Job) => void;
   onPrepClick: (job: Job) => void;
+  onRejectClick: (job: Job) => void;
 }) {
   const { setNodeRef } = useDroppable({
     id: `column-${status}`,
@@ -263,7 +275,7 @@ function Column({
           {jobs.length === 0 ? (
             <p className="mt-3 text-center text-xs text-[#6b6b80]">No jobs</p>
           ) : (
-            jobs.map((job) => <SortableJobCard key={job.id} job={job} onCardClick={onCardClick} onPrepClick={onPrepClick} />)
+            jobs.map((job) => <SortableJobCard key={job.id} job={job} onCardClick={onCardClick} onPrepClick={onPrepClick} onRejectClick={onRejectClick} />)
           )}
         </div>
       </SortableContext>
@@ -282,6 +294,7 @@ export default function KanbanBoard({ filterOverride }: KanbanBoardProps = {}) {
   const [filter, setFilter] = useState<FilterType>("all");
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
   const [prepJob, setPrepJob] = useState<Job | null>(null);
+  const [rejectJob, setRejectJob] = useState<Job | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
@@ -393,6 +406,17 @@ export default function KanbanBoard({ filterOverride }: KanbanBoardProps = {}) {
       {prepJob && (
         <InterviewPrepModal job={prepJob} onClose={() => setPrepJob(null)} />
       )}
+      {rejectJob && (
+        <RejectionModal
+          job={rejectJob}
+          onClose={() => setRejectJob(null)}
+          onSubmitted={() => {
+            setRejectJob(null);
+            // Refresh board after rejection
+            fetchJobs({ limit: 200 }).then((data) => setColumns(groupJobsByStatus(data.jobs))).catch(() => undefined);
+          }}
+        />
+      )}
       <div className="flex flex-wrap gap-2">
         {(
           [
@@ -426,14 +450,14 @@ export default function KanbanBoard({ filterOverride }: KanbanBoardProps = {}) {
       >
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
           {STATUS_ORDER.map((status) => (
-            <Column key={status} status={status} jobs={filteredColumns[status]} onCardClick={setSelectedJob} onPrepClick={setPrepJob} />
+            <Column key={status} status={status} jobs={filteredColumns[status]} onCardClick={setSelectedJob} onPrepClick={setPrepJob} onRejectClick={setRejectJob} />
           ))}
         </div>
 
         <DragOverlay>
           {activeJob ? (
             <div className="w-[260px]">
-              <SortableJobCard job={activeJob} onCardClick={() => undefined} onPrepClick={() => undefined} />
+              <SortableJobCard job={activeJob} onCardClick={() => undefined} onPrepClick={() => undefined} onRejectClick={() => undefined} />
             </div>
           ) : null}
         </DragOverlay>

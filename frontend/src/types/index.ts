@@ -51,3 +51,19 @@ export interface InterviewPrep {
   technical: InterviewQuestion[];
   study_checklist: string[];
 }
+
+export interface RejectionReason {
+  category: string;
+  confidence: number;
+  explanation: string;
+}
+
+export interface RejectionPatterns {
+  total: number;
+  by_category: Record<string, number>;
+  meta_analysis?: {
+    top_reason: string;
+    pattern: string;
+    recommendation: string;
+  };
+}

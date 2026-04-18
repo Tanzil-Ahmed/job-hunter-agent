@@ -10,6 +10,7 @@ import type {
   Job,
   RejectionPatterns,
   RejectionReason,
+  SkillGapData,
   Stats,
 } from "../types";
 
@@ -82,6 +83,11 @@ export async function submitRejection(
 export async function fetchRejectionPatterns(): Promise<RejectionPatterns> {
   const response = await apiClient.get<RejectionPatterns>("/api/rejection-patterns");
   return response.data;
+}
+
+export async function fetchSkillGap(): Promise<SkillGapData> {
+  const response = await apiClient.get<{ skill_gap: SkillGapData }>("/api/skill-gap");
+  return response.data.skill_gap;
 }
 
 export async function fetchApplyToday(): Promise<{ applications: Application[]; count: number; date: string }> {

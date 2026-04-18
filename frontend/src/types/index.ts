@@ -80,3 +80,16 @@ export interface RejectionPatterns {
     recommendation: string;
   };
 }
+
+export interface SkillGapItem {
+  name: string;
+  demand_score: number;
+  your_score: number;
+  resource_url?: string;
+  resource_name?: string;
+}
+
+export interface SkillGapData {
+  skills: SkillGapItem[];
+  summary: string;
+}

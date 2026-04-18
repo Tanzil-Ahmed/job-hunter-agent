@@ -586,6 +586,83 @@ async def get_interview_prep(job_id: int):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 # ─────────────────────────────
+# SKILL GAP
+# ─────────────────────────────
+_SKILL_GAP_EMPTY = {"skills": [], "summary": "Run fit scores on more jobs to see skill gaps."}
+
+
+@router.get("/skill-gap")
+async def get_skill_gap():
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("SELECT fit_breakdown FROM jobs WHERE fit_breakdown IS NOT NULL")
+            rows = cur.fetchall()
+        conn.close()
+    except Exception as e:
+        logger.error(f"skill-gap DB error: {e}")
+        return {"skill_gap": _SKILL_GAP_EMPTY}
+
+    if not rows:
+        return {"skill_gap": _SKILL_GAP_EMPTY}
+
+    # Tally missing skills across all fit breakdowns
+    skill_counts: dict = {}
+    for row in rows:
+        fb = row["fit_breakdown"]
+        if isinstance(fb, str):
+            try:
+                fb = json.loads(fb)
+            except Exception:
+                continue
+        for skill in fb.get("missing", []):
+            if skill:
+                skill_counts[skill] = skill_counts.get(skill, 0) + 1
+
+    if not skill_counts:
+        return {"skill_gap": _SKILL_GAP_EMPTY}
+
+    top_skills = sorted(skill_counts.items(), key=lambda x: x[1], reverse=True)[:10]
+
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if not api_key:
+        logger.warning("ANTHROPIC_API_KEY not set — returning basic skill gap")
+        return {"skill_gap": _SKILL_GAP_EMPTY}
+
+    skills_text = "\n".join(f"- {name}: appeared in {count} job(s)" for name, count in top_skills)
+    user_prompt = (
+        f"Candidate: {CANDIDATE_SUMMARY}\n\n"
+        f"Top missing skills from {len(rows)} job fit analyses:\n{skills_text}\n\n"
+        "For each skill, estimate demand_score (0-10, how often it appears) and your_score (0-10, candidate's current level). "
+        "Include a real learning resource URL and name. Return ONLY a JSON object:\n"
+        '{"skills": [{"name": "...", "demand_score": 0-10, "your_score": 0-10, '
+        '"resource_url": "https://...", "resource_name": "..."}], '
+        '"summary": "One paragraph with key gaps and focus recommendation."}'
+    )
+
+    try:
+        import anthropic as _anthropic
+        client = _anthropic.Anthropic(api_key=api_key)
+        message = client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=1024,
+            system="You are a career skills analyst. Analyze skill gaps and suggest resources. Return ONLY valid JSON.",
+            messages=[{"role": "user", "content": user_prompt}],
+        )
+        raw = message.content[0].text.strip()
+        if raw.startswith("```"):
+            raw = raw.split("\n", 1)[-1]
+        if raw.endswith("```"):
+            raw = raw.rsplit("```", 1)[0].strip()
+        skill_gap = json.loads(raw)
+    except Exception as e:
+        logger.error(f"Claude skill-gap call failed: {e}")
+        return {"skill_gap": _SKILL_GAP_EMPTY}
+
+    return {"skill_gap": skill_gap}
+
+
+# ─────────────────────────────
 # GHOST DETECTOR
 # ─────────────────────────────
 @router.get("/ghost-detector")

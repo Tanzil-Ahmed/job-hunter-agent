@@ -1,4 +1,4 @@
-type Page = "dashboard" | "run-agent" | "jobs" | "applications" | "files" | "settings";
+type Page = "dashboard" | "run-agent" | "jobs" | "applications" | "files" | "skill-gap" | "settings";
 
 interface SidebarProps {
   activePage: string;
@@ -12,6 +12,7 @@ const NAV_ITEMS: Array<{ id: Page; label: string }> = [
   { id: "jobs", label: "Jobs" },
   { id: "applications", label: "Applications" },
   { id: "files", label: "Files" },
+  { id: "skill-gap", label: "Skill Gap" },
   { id: "settings", label: "Settings" },
 ];
 

@@ -7,8 +7,9 @@ import JobsPage from "./components/JobsPage";
 import RunAgentPage from "./components/RunAgentPage";
 import SettingsPage from "./components/SettingsPage";
 import Sidebar from "./components/Sidebar";
+import SkillGapPage from "./components/SkillGapPage";
 
-type Page = "dashboard" | "run-agent" | "jobs" | "applications" | "files" | "settings";
+type Page = "dashboard" | "run-agent" | "jobs" | "applications" | "files" | "skill-gap" | "settings";
 
 export default function App() {
   const [currentPage, setCurrentPage] = useState<Page>("dashboard");
@@ -38,6 +39,7 @@ export default function App() {
       case "jobs":          return <JobsPage />;
       case "applications":  return <ApplicationsPage />;
       case "files":         return <FilesPage />;
+      case "skill-gap":     return <SkillGapPage />;
       case "settings":      return <SettingsPage />;
     }
   };

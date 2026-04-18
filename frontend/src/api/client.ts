@@ -1,6 +1,6 @@
 import axios from "axios";
 
-import type { Application, FileEntry, FitBreakdown, Job, Stats } from "../types";
+import type { Application, FileEntry, FitBreakdown, InterviewPrep, Job, Stats } from "../types";
 
 type QueryParams = Record<string, string | number | boolean | undefined>;
 
@@ -48,6 +48,13 @@ export async function fetchFitBreakdown(jobId: number): Promise<FitBreakdown> {
   );
 
   return response.data.fit_breakdown;
+}
+
+export async function fetchInterviewPrep(jobId: number): Promise<InterviewPrep> {
+  const response = await apiClient.get<{ interview_prep: InterviewPrep }>(
+    `/api/jobs/${jobId}/interview-prep`,
+  );
+  return response.data.interview_prep;
 }
 
 export async function fetchApplyToday(): Promise<{ applications: Application[]; count: number; date: string }> {

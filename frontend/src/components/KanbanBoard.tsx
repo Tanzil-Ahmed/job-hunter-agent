@@ -17,6 +17,7 @@ import { CSS } from "@dnd-kit/utilities";
 import { fetchJobs, updateJobStatus } from "../api/client";
 import type { Job } from "../types/index";
 import FitScoreModal from "./FitScoreModal";
+import InterviewPrepModal from "./InterviewPrepModal";
 
 type BoardStatus = "found" | "applied" | "interview" | "offer" | "rejected";
 type FilterType = "all" | "tech" | "non-tech" | "internship";
@@ -166,7 +167,15 @@ function moveJob(columns: BoardColumns, jobId: number, toStatus: BoardStatus): B
   return updated;
 }
 
-function SortableJobCard({ job, onCardClick }: { job: Job; onCardClick: (job: Job) => void }) {
+function SortableJobCard({
+  job,
+  onCardClick,
+  onPrepClick,
+}: {
+  job: Job;
+  onCardClick: (job: Job) => void;
+  onPrepClick: (job: Job) => void;
+}) {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } = useSortable({
     id: `job-${job.id}`,
   });
@@ -201,17 +210,26 @@ function SortableJobCard({ job, onCardClick }: { job: Job; onCardClick: (job: Jo
           {job.status}
         </span>
       </div>
-      {job.job_url ? (
-        <a
-          href={job.job_url}
-          target="_blank"
-          rel="noreferrer"
-          onClick={(e) => e.stopPropagation()}
-          className="mt-3 inline-block text-xs text-[#7c6aff] hover:text-[#e8e8f0]"
+      <div className="mt-3 flex items-center gap-3">
+        {job.job_url ? (
+          <a
+            href={job.job_url}
+            target="_blank"
+            rel="noreferrer"
+            onClick={(e) => e.stopPropagation()}
+            className="text-xs text-[#7c6aff] hover:text-[#e8e8f0]"
+          >
+            Apply →
+          </a>
+        ) : null}
+        <button
+          type="button"
+          onClick={(e) => { e.stopPropagation(); onPrepClick(job); }}
+          className="text-xs text-[#00d084] hover:text-[#e8e8f0]"
         >
-          Apply →
-        </a>
-      ) : null}
+          Prep
+        </button>
+      </div>
     </article>
   );
 }
@@ -220,10 +238,12 @@ function Column({
   status,
   jobs,
   onCardClick,
+  onPrepClick,
 }: {
   status: BoardStatus;
   jobs: Job[];
   onCardClick: (job: Job) => void;
+  onPrepClick: (job: Job) => void;
 }) {
   const { setNodeRef } = useDroppable({
     id: `column-${status}`,
@@ -243,7 +263,7 @@ function Column({
           {jobs.length === 0 ? (
             <p className="mt-3 text-center text-xs text-[#6b6b80]">No jobs</p>
           ) : (
-            jobs.map((job) => <SortableJobCard key={job.id} job={job} onCardClick={onCardClick} />)
+            jobs.map((job) => <SortableJobCard key={job.id} job={job} onCardClick={onCardClick} onPrepClick={onPrepClick} />)
           )}
         </div>
       </SortableContext>
@@ -261,6 +281,7 @@ export default function KanbanBoard({ filterOverride }: KanbanBoardProps = {}) {
   const [activeJobId, setActiveJobId] = useState<number | null>(null);
   const [filter, setFilter] = useState<FilterType>("all");
   const [selectedJob, setSelectedJob] = useState<Job | null>(null);
+  const [prepJob, setPrepJob] = useState<Job | null>(null);
 
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 4 } }));
 
@@ -369,6 +390,9 @@ export default function KanbanBoard({ filterOverride }: KanbanBoardProps = {}) {
       {selectedJob && (
         <FitScoreModal job={selectedJob} onClose={() => setSelectedJob(null)} />
       )}
+      {prepJob && (
+        <InterviewPrepModal job={prepJob} onClose={() => setPrepJob(null)} />
+      )}
       <div className="flex flex-wrap gap-2">
         {(
           [
@@ -402,14 +426,14 @@ export default function KanbanBoard({ filterOverride }: KanbanBoardProps = {}) {
       >
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-5">
           {STATUS_ORDER.map((status) => (
-            <Column key={status} status={status} jobs={filteredColumns[status]} onCardClick={setSelectedJob} />
+            <Column key={status} status={status} jobs={filteredColumns[status]} onCardClick={setSelectedJob} onPrepClick={setPrepJob} />
           ))}
         </div>
 
         <DragOverlay>
           {activeJob ? (
             <div className="w-[260px]">
-              <SortableJobCard job={activeJob} onCardClick={() => undefined} />
+              <SortableJobCard job={activeJob} onCardClick={() => undefined} onPrepClick={() => undefined} />
             </div>
           ) : null}
         </DragOverlay>

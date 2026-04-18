@@ -40,3 +40,14 @@ export interface FileEntry {
   size: number;
   modified: string;
 }
+
+export interface InterviewQuestion {
+  question: string;
+  answer_template: string;
+}
+
+export interface InterviewPrep {
+  behavioral: InterviewQuestion[];
+  technical: InterviewQuestion[];
+  study_checklist: string[];
+}

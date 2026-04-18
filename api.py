@@ -74,11 +74,12 @@ def startup():
         conn = get_conn()
         with conn.cursor() as cur:
             cur.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS fit_breakdown JSONB")
+            cur.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS interview_prep JSONB")
         conn.commit()
         conn.close()
-        logger.info("fit_breakdown column ready")
+        logger.info("fit_breakdown + interview_prep columns ready")
     except Exception as e:
-        logger.error(f"fit_breakdown migration error: {e}")
+        logger.error(f"column migration error: {e}")
 
 # ─────────────────────────────
 # ROOT
@@ -483,6 +484,103 @@ async def get_fit_breakdown(job_id: int):
         raise
     except Exception as e:
         logger.error(f"fit_breakdown error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+# ─────────────────────────────
+# INTERVIEW PREP
+# ─────────────────────────────
+_INTERVIEW_PLACEHOLDER = {"behavioral": [], "technical": [], "study_checklist": []}
+
+
+@router.get("/jobs/{job_id}/interview-prep")
+async def get_interview_prep(job_id: int):
+    from fastapi import HTTPException
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, job_title, company_name, description, interview_prep "
+                "FROM jobs WHERE id = %s",
+                (job_id,)
+            )
+            row = cur.fetchone()
+        conn.close()
+
+        if row is None:
+            raise HTTPException(status_code=404, detail="Job not found")
+
+        if row["interview_prep"]:
+            return {"interview_prep": row["interview_prep"]}
+
+        # ── Generate via Claude Sonnet ──
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            logger.warning("ANTHROPIC_API_KEY not set — returning placeholder")
+            return {"interview_prep": _INTERVIEW_PLACEHOLDER}
+
+        job_description = row.get("description") or ""
+        user_prompt = (
+            f"Job title: {row['job_title']}\n"
+            f"Company: {row['company_name']}\n"
+            f"Description: {job_description[:3000]}\n\n"
+            f"Candidate: {CANDIDATE_SUMMARY}\n\n"
+            "Generate interview prep. Return ONLY a JSON object — no markdown, no explanation:\n"
+            '{"behavioral":[{"question":"...","answer_template":"STAR format template..."}],'
+            '"technical":[{"question":"...","answer_template":"..."}],'
+            '"study_checklist":["topic1","topic2"]}\n'
+            "Include 5 behavioral questions with STAR answer templates, "
+            "3-5 technical questions relevant to the role, and a study checklist of topics."
+        )
+
+        try:
+            import anthropic as _anthropic
+            client = _anthropic.Anthropic(api_key=api_key)
+            message = client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=2048,
+                system="You are an interview coach. Given a job description and candidate profile, generate interview prep material. Return ONLY valid JSON. Use \\n for newlines inside strings, never use actual newline characters inside JSON string values.",
+                messages=[{"role": "user", "content": user_prompt}],
+            )
+            raw = message.content[0].text.strip()
+            # Strip markdown fences
+            if raw.startswith("```"):
+                raw = raw.split("\n", 1)[-1]
+            if raw.endswith("```"):
+                raw = raw.rsplit("```", 1)[0].strip()
+            prep = json.loads(raw)
+        except json.JSONDecodeError as je:
+            logger.error(f"interview_prep JSON parse failed: {je}")
+            # Try to salvage — replace unescaped newlines in string values
+            import re
+            try:
+                cleaned = re.sub(r'(?<=": ")(.*?)(?="[,\}])', lambda m: m.group(0).replace('\n', '\\n'), raw, flags=re.DOTALL)
+                prep = json.loads(cleaned)
+            except Exception:
+                logger.error("interview_prep salvage parse also failed")
+                return {"interview_prep": _INTERVIEW_PLACEHOLDER}
+        except Exception as e:
+            logger.error(f"Claude interview_prep call failed: {e}")
+            return {"interview_prep": _INTERVIEW_PLACEHOLDER}
+
+        # ── Cache in DB ──
+        try:
+            conn = get_conn()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE jobs SET interview_prep = %s WHERE id = %s",
+                    (json.dumps(prep), job_id)
+                )
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            logger.error(f"interview_prep cache write failed: {e}")
+
+        return {"interview_prep": prep}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"interview_prep error: {e}")
         raise HTTPException(status_code=500, detail="Internal server error")
 
 # ─────────────────────────────

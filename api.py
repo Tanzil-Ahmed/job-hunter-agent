@@ -70,6 +70,16 @@ def startup():
     except Exception as e:
         logger.error(f"DB startup error: {e}")
 
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("ALTER TABLE jobs ADD COLUMN IF NOT EXISTS fit_breakdown JSONB")
+        conn.commit()
+        conn.close()
+        logger.info("fit_breakdown column ready")
+    except Exception as e:
+        logger.error(f"fit_breakdown migration error: {e}")
+
 # ─────────────────────────────
 # ROOT
 # ─────────────────────────────
@@ -357,6 +367,123 @@ async def websocket_logs(ws: WebSocket):
             await asyncio.sleep(1)
     except WebSocketDisconnect:
         pass
+
+# ─────────────────────────────
+# JOB STATUS UPDATE
+# ─────────────────────────────
+class StatusUpdate(BaseModel):
+    status: str
+
+@router.patch("/jobs/{job_id}/status")
+async def update_job_status(job_id: int, body: StatusUpdate):
+    from fastapi import HTTPException
+    allowed = {"found", "applied", "interview", "offer", "rejected"}
+    if body.status not in allowed:
+        raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {allowed}")
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute(
+                "UPDATE jobs SET status = %s, updated_at = NOW() WHERE id = %s RETURNING *",
+                (body.status, job_id)
+            )
+            job = cur.fetchone()
+        conn.commit()
+        conn.close()
+        if not job:
+            raise HTTPException(status_code=404, detail="Job not found")
+        return {"success": True, "job": dict(job)}
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"update_job_status error: {e}")
+        raise
+
+# ─────────────────────────────
+# FIT BREAKDOWN
+# ─────────────────────────────
+CANDIDATE_SUMMARY = (
+    "Tanzil Ahmed — MCA 2024, Java Full-Stack Developer & AI Engineer. "
+    "Skills: Python, Java, Spring Boot, FastAPI, React, PostgreSQL, Claude API, "
+    "LangChain, Docker basics, GCP, Azure. 2 data engineering internships. "
+    "Built Job Hunter AI and MixMaster AI."
+)
+
+_FIT_PLACEHOLDER = {"skills": 0, "location": 0, "culture": 0, "seniority": 0, "missing": []}
+
+
+@router.get("/jobs/{job_id}/fit-breakdown")
+async def get_fit_breakdown(job_id: int):
+    from fastapi import HTTPException
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT id, job_title, company_name, location, description, fit_breakdown "
+                "FROM jobs WHERE id = %s",
+                (job_id,)
+            )
+            row = cur.fetchone()
+        conn.close()
+
+        if row is None:
+            raise HTTPException(status_code=404, detail="Job not found")
+
+        if row["fit_breakdown"]:
+            return {"fit_breakdown": row["fit_breakdown"]}
+
+        # ── Generate via Claude Haiku ──
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            logger.warning("ANTHROPIC_API_KEY not set — returning placeholder")
+            return {"fit_breakdown": _FIT_PLACEHOLDER}
+
+        job_description = row.get("description") or ""
+        user_prompt = (
+            f"Job title: {row['job_title']}\n"
+            f"Company: {row['company_name']}\n"
+            f"Location: {row.get('location') or 'Not specified'}\n"
+            f"Description: {job_description[:2000]}\n\n"
+            f"Candidate: {CANDIDATE_SUMMARY}\n\n"
+            'Return ONLY a JSON object — no markdown, no explanation:\n'
+            '{"skills": 0-10, "location": 0-10, "culture": 0-10, "seniority": 0-10, "missing": ["skill1", "skill2"]}'
+        )
+
+        try:
+            import anthropic as _anthropic
+            client = _anthropic.Anthropic(api_key=api_key)
+            message = client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=256,
+                system="You are a job fit analyzer. Given a job description and candidate profile, return ONLY valid JSON with no extra text.",
+                messages=[{"role": "user", "content": user_prompt}],
+            )
+            raw = message.content[0].text.strip()
+            breakdown = json.loads(raw)
+        except Exception as e:
+            logger.error(f"Claude fit_breakdown call failed: {e}")
+            return {"fit_breakdown": _FIT_PLACEHOLDER}
+
+        # ── Cache in DB ──
+        try:
+            conn = get_conn()
+            with conn.cursor() as cur:
+                cur.execute(
+                    "UPDATE jobs SET fit_breakdown = %s WHERE id = %s",
+                    (json.dumps(breakdown), job_id)
+                )
+            conn.commit()
+            conn.close()
+        except Exception as e:
+            logger.error(f"fit_breakdown cache write failed: {e}")
+
+        return {"fit_breakdown": breakdown}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"fit_breakdown error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
 
 # ─────────────────────────────
 # INCLUDE ROUTER

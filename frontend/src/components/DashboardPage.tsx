@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { fetchApplyToday, fetchStats } from "../api/client";
 import type { Application, Stats } from "../types";
+import GhostDetectorCard from "./GhostDetectorCard";
 import RejectionPatternsCard from "./RejectionPatternsCard";
 
 function useCountUp(target: number, duration = 600): number {
@@ -110,6 +111,7 @@ export default function DashboardPage() {
       </section>
 
       <RejectionPatternsCard />
+      <GhostDetectorCard />
     </div>
   );
 }

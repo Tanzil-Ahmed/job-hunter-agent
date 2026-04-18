@@ -586,6 +586,96 @@ async def get_interview_prep(job_id: int):
         raise HTTPException(status_code=500, detail="Internal server error")
 
 # ─────────────────────────────
+# GHOST DETECTOR
+# ─────────────────────────────
+@router.get("/ghost-detector")
+async def ghost_detector():
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute("""
+                SELECT DISTINCT ON (j.id)
+                    j.id, j.job_title, j.company_name, j.job_url,
+                    EXTRACT(DAY FROM NOW() - a.applied_at)::int AS days_since_applied
+                FROM jobs j
+                JOIN applications a ON a.job_id = j.id
+                WHERE j.status = 'applied'
+                  AND j.rejection_reason IS NULL
+                  AND a.applied_at < NOW() - INTERVAL '7 days'
+                ORDER BY j.id, a.applied_at ASC
+            """)
+            rows = [dict(r) for r in cur.fetchall()]
+        conn.close()
+        return {"ghosted_jobs": rows, "total": len(rows)}
+    except Exception as e:
+        logger.error(f"ghost-detector error: {e}")
+        return {"ghosted_jobs": [], "total": 0}
+
+
+@router.post("/jobs/{job_id}/follow-up")
+async def generate_follow_up(job_id: int):
+    from fastapi import HTTPException
+    try:
+        conn = get_conn()
+        with conn.cursor() as cur:
+            cur.execute(
+                "SELECT j.id, j.job_title, j.company_name, "
+                "EXTRACT(DAY FROM NOW() - a.applied_at)::int AS days_since_applied "
+                "FROM jobs j "
+                "JOIN applications a ON a.job_id = j.id "
+                "WHERE j.id = %s "
+                "ORDER BY a.applied_at ASC LIMIT 1",
+                (job_id,)
+            )
+            row = cur.fetchone()
+        conn.close()
+
+        if row is None:
+            raise HTTPException(status_code=404, detail="Job not found")
+
+        days = row["days_since_applied"] or 0
+        api_key = os.environ.get("ANTHROPIC_API_KEY")
+        if not api_key:
+            raise HTTPException(status_code=500, detail="ANTHROPIC_API_KEY not configured")
+
+        user_prompt = (
+            f"Job title: {row['job_title']}\n"
+            f"Company: {row['company_name']}\n"
+            f"Days since applied: {days}\n"
+            f"Candidate: {CANDIDATE_SUMMARY}\n\n"
+            "Write a polite, professional follow-up email. Return ONLY a JSON object:\n"
+            '{"subject": "...", "body": "..."}'
+        )
+
+        try:
+            import anthropic as _anthropic
+            client = _anthropic.Anthropic(api_key=api_key)
+            message = client.messages.create(
+                model="claude-sonnet-4-20250514",
+                max_tokens=512,
+                system="You are a professional career coach. Write a polite follow-up email for a job application. Return ONLY valid JSON.",
+                messages=[{"role": "user", "content": user_prompt}],
+            )
+            raw = message.content[0].text.strip()
+            if raw.startswith("```"):
+                raw = raw.split("\n", 1)[-1]
+            if raw.endswith("```"):
+                raw = raw.rsplit("```", 1)[0].strip()
+            follow_up = json.loads(raw)
+        except Exception as e:
+            logger.error(f"Claude follow-up call failed: {e}")
+            raise HTTPException(status_code=500, detail="Failed to generate follow-up email")
+
+        return {"follow_up": follow_up}
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"follow-up error: {e}")
+        raise HTTPException(status_code=500, detail="Internal server error")
+
+
+# ─────────────────────────────
 # REJECTION ANALYSIS
 # ─────────────────────────────
 class RejectionRequest(BaseModel):

@@ -4,6 +4,8 @@ import type {
   Application,
   FileEntry,
   FitBreakdown,
+  FollowUpEmail,
+  GhostedJob,
   InterviewPrep,
   Job,
   RejectionPatterns,
@@ -104,4 +106,14 @@ export async function fetchRunStatus(): Promise<{ status: string; run_id: string
 export async function fetchFiles(): Promise<{ files: FileEntry[] }> {
   const response = await apiClient.get<{ files: FileEntry[] }>("/api/files");
   return response.data;
+}
+
+export async function fetchGhostedJobs(): Promise<{ ghosted_jobs: GhostedJob[]; total: number }> {
+  const response = await apiClient.get<{ ghosted_jobs: GhostedJob[]; total: number }>("/api/ghost-detector");
+  return response.data;
+}
+
+export async function generateFollowUp(jobId: number): Promise<FollowUpEmail> {
+  const response = await apiClient.post<{ follow_up: FollowUpEmail }>(`/api/jobs/${jobId}/follow-up`);
+  return response.data.follow_up;
 }

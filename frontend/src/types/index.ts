@@ -58,6 +58,19 @@ export interface RejectionReason {
   explanation: string;
 }
 
+export interface GhostedJob {
+  id: number;
+  job_title: string;
+  company_name: string;
+  job_url?: string;
+  days_since_applied: number;
+}
+
+export interface FollowUpEmail {
+  subject: string;
+  body: string;
+}
+
 export interface RejectionPatterns {
   total: number;
   by_category: Record<string, number>;
